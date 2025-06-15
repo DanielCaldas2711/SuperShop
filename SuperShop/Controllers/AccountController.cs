@@ -86,6 +86,15 @@ namespace SuperShop.Controllers
                         return View(model);
                     }
 
+                    await _userHelper.AddUserToRoleAsync(user, "Customer");
+
+                    var isInRole = await _userHelper.IsUserInRoleAsync(user, "Customer");
+
+                    if (!isInRole)
+                    {
+                        await _userHelper.AddUserToRoleAsync(user, "Customer");
+                    }
+
                     var loginViewModel = new LoginViewModel
                     {
                         Password = model.Password,
