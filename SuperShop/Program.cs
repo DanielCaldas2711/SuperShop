@@ -22,7 +22,7 @@ namespace SuperShop
 
         private static void RunSeeding(IHost host)
         {
-           var scopeFactory = host.Services.GetService<IServiceScopeFactory>();
+            var scopeFactory = host.Services.GetService<IServiceScopeFactory>();
             using (var scope = scopeFactory.CreateScope())
             {
                 var seeder = scope.ServiceProvider.GetService<SeedDb>();
