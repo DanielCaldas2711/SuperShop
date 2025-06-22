@@ -7,7 +7,7 @@ namespace SuperShop.Data
 {
     public interface IOrderRepository : IGenericRepository<Order>
     {
-        Task<IQueryable<Order>> GetorderAsync(string userName);
+        Task<IQueryable<Order>> GetOrderAsync(string userName);
 
 
         Task<IQueryable<OrderDetailTemp>> GetDetailsTempAsync(string userName);
@@ -23,5 +23,9 @@ namespace SuperShop.Data
 
 
         Task<bool> ConfirmOrderAsync(string userName);
+
+        Task DeliverOrder(DeliveryViewModel model);
+
+        Task<Order> GetOrderAsync(int id);
     }
 }
