@@ -1,11 +1,16 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
 using SuperShop.Data;
 using SuperShop.Data.Entities;
 using SuperShop.Helpers;
 using SuperShop.Models;
+using System;
+using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
-using System.Runtime.Serialization;
+using System.Security.Claims;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace SuperShop.Controllers
@@ -14,19 +19,22 @@ namespace SuperShop.Controllers
     {
         private readonly IUserHelper _userHelper;
         private readonly ICountryRepository _countryRepository;
+        private readonly IConfiguration _configuration;
 
         public AccountController(IUserHelper userHelper,
-            ICountryRepository countryRepository)
+            ICountryRepository countryRepository,
+            IConfiguration configuration)
         {
             _userHelper = userHelper;
             _countryRepository = countryRepository;
+            _configuration = configuration;
         }
 
         public IActionResult Login()
         {
             if (User.Identity.IsAuthenticated)
             {
-                return RedirectToAction("Index","Home");
+                return RedirectToAction("Index", "Home");
             }
 
             return View();
@@ -50,7 +58,7 @@ namespace SuperShop.Controllers
                 }
             }
 
-            this.ModelState.AddModelError(string.Empty,"Failed to login");
+            this.ModelState.AddModelError(string.Empty, "Failed to login");
             return View(model);
         }
 
@@ -122,11 +130,11 @@ namespace SuperShop.Controllers
 
                     if (result2.Succeeded)
                     {
-                        return RedirectToAction("Index","Home");
+                        return RedirectToAction("Index", "Home");
                     }
 
                     ModelState.AddModelError(string.Empty, "The user couldn't be logged.");
-                    
+
 
                 }
             }
@@ -151,7 +159,7 @@ namespace SuperShop.Controllers
                 if (city != null)
                 {
                     var country = await _countryRepository.GetCountryAsync(city);
-                    if (country != null) 
+                    if (country != null)
                     {
                         model.CountryId = country.Id;
                         model.Cities = _countryRepository.GetComboCities(country.Id);
@@ -170,7 +178,7 @@ namespace SuperShop.Controllers
         [HttpPost]
         public async Task<ActionResult> ChangeUser(ChangeUserViewModel model)
         {
-            if (ModelState.IsValid) 
+            if (ModelState.IsValid)
             {
                 var user = await _userHelper.GetUserByEmailAsync(this.User.Identity.Name);
 
@@ -193,10 +201,10 @@ namespace SuperShop.Controllers
                     }
                     else
                     {
-                        ModelState.AddModelError(string.Empty,response.Errors.FirstOrDefault().Description);
+                        ModelState.AddModelError(string.Empty, response.Errors.FirstOrDefault().Description);
                     }
                 }
-            }            
+            }
 
             return View(model);
         }
@@ -213,7 +221,7 @@ namespace SuperShop.Controllers
             {
                 var user = await _userHelper.GetUserByEmailAsync(this.User.Identity.Name);
 
-                if (user != null) 
+                if (user != null)
                 {
 
                     var result = await _userHelper.ChangePasswordAsync(user, model.OldPassword, model.NewPassword);
@@ -224,16 +232,59 @@ namespace SuperShop.Controllers
                     }
                     else
                     {
-                        ModelState.AddModelError(string.Empty,result.Errors.FirstOrDefault().Description);
+                        ModelState.AddModelError(string.Empty, result.Errors.FirstOrDefault().Description);
                     }
 
                 }
                 else
                 {
                     ModelState.AddModelError(string.Empty, "User not found.");
-                }                
+                }
             }
             return View(model);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> CreateToken([FromBody] LoginViewModel model)
+        {
+            if (this.ModelState.IsValid)
+            {
+                var user = await _userHelper.GetUserByEmailAsync(model.UserName);
+                if (user != null)
+                {
+                    var result = await _userHelper.ValidatePasswordAsync(
+                        user,
+                        model.Password);
+
+                    if (result.Succeeded)
+                    {
+                        var claims = new[]
+                        {
+                            new Claim(JwtRegisteredClaimNames.Sub, user.Email),
+                            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+                        };
+
+                        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Tokens:Key"]));
+                        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+                        var token = new JwtSecurityToken(
+                            _configuration["Tokens:Issuer"],
+                            _configuration["Tokens:Audience"],
+                            claims,
+                            expires: DateTime.UtcNow.AddDays(15),
+                            signingCredentials: credentials);
+                        var results = new
+                        {
+                            token = new JwtSecurityTokenHandler().WriteToken(token),
+                            expiration = token.ValidTo
+                        };
+
+                        return this.Created(string.Empty, results);
+
+                    }
+                }
+            }
+
+            return BadRequest();
         }
 
         public IActionResult NotAuthorized()
